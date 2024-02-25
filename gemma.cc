@@ -64,6 +64,12 @@
 #include "src/sentencepiece_processor.h"
 // #include "third_party/sentencepiece/src/util.h"
 
+#include "justine.h"
+
+int g_run_count;
+int g_eval_count;
+int g_matvec_count;
+
 namespace gcpp {
 
 template <class TConfig>
@@ -546,6 +552,9 @@ void GenerateImpl(GemmaImpl<TConfig>& gemma, const InferenceArgs& args,
     pos_offset += end_offset;
   }
 
+  g_matvec_count = 0;
+  ++g_eval_count;
+
   if (verbosity >= 2) {
     // in the future this output should not occur in GenerateImpl but instead
     // should be available as observable state for frontend code to handle I/O.
@@ -587,6 +596,8 @@ void GenerateImpl(GemmaImpl<TConfig>& gemma, const InferenceArgs& args,
       token = SampleTopK<kTopK>(activations.logits.data(), kVocabSize, gen,
                                 args.temperature, accept_token);
     }
+    g_matvec_count = 0;
+    ++g_eval_count;
     if (!stream_token(token, activations.logits[token])) {
       token = EOS_ID;
     }
@@ -754,6 +765,7 @@ void GemmaImpl<ConfigGemma2B>::Generate(const InferenceArgs& args,
   (*this, args, prompt, start_pos, pool, inner_pool, stream_token, accept_token,
    gen, verbosity);
 }
+
 template <>
 void GemmaImpl<ConfigGemma7B>::Generate(const InferenceArgs& args,
                                         const std::vector<int>& prompt,
@@ -797,6 +809,9 @@ void GenerateGemma(Gemma& gemma, const InferenceArgs& args,
   gemma.impl_->Generate(args, prompt, start_pos, pool, inner_pool, stream_token,
                         accept_token, gen, verbosity);
   pool.SetWaitMode(hwy::PoolWaitMode::kBlock);
+  g_matvec_count = 0;
+  g_eval_count = 0;
+  ++g_run_count;
 }
 
 }  // namespace gcpp

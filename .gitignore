@@ -5,3 +5,4 @@
 *.dbg
 /gemma
 /.aarch64
+/trace

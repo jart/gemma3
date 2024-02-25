@@ -48,6 +48,8 @@
 #include "hwy/contrib/math/math-inl.h"
 #include "hwy/contrib/matvec/matvec-inl.h"
 
+#include "justine.h"
+
 HWY_BEFORE_NAMESPACE();
 namespace gcpp {
 namespace HWY_NAMESPACE {
@@ -196,6 +198,51 @@ HWY_INLINE void MatVec(const CompressedArray<MatT, kCapacity>& mat,
     detail::FullDotProductsForStrip(df, mat, mat_ofs, kInner, r0, num_rows,
                                     vec_aligned, out + r0);
   }
+
+#if 0
+
+  char path[64];
+  snprintf(path, sizeof(path), "trace/%03d_%03d_%05d.dat", g_run_count, g_eval_count, g_matvec_count++);
+  int fd = open(path, O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0666);
+  write(fd, out, kOuter * 4);
+  close(fd);
+
+#else
+
+  char path[64];
+  snprintf(path, sizeof(path), "trace/%03d_%03d_%05d.dat", g_run_count, g_eval_count, g_matvec_count++);
+  int fd = open(path, O_RDONLY | O_CLOEXEC);
+  if (fd == -1) {
+    fprintf(stderr, "%s: not found\n", path);
+    return;
+  }
+  ssize_t len;
+  len = lseek(fd, 0, SEEK_END);
+  if (len != kOuter * 4) {
+    fprintf(stderr, "%s: unexpected length: wanted %ld but got %ld\n", path, (long)(kOuter * 4), (long)len);
+    return;
+  }
+  float *gold = (float *)malloc(len);
+  if (pread(fd, gold, len, 0) != len) {
+    fprintf(stderr, "%s: read failed: %s\n", path, strerror(errno));
+    return;
+  }
+  close(fd);
+  double sad = 0;
+  float min[2] = {__FLT_MAX__, __FLT_MAX__};
+  float max[2] = {__FLT_MIN__, __FLT_MIN__};
+  for (int i = 0; i < kOuter; ++i) {
+    sad += std::abs(out[i] - gold[i]);
+    min[0] = std::min(min[0], gold[i]);
+    min[1] = std::min(min[1], out[i]);
+    max[0] = std::max(max[0], gold[i]);
+    max[1] = std::max(max[1], out[i]);
+  }
+  free(gold);
+  sad /= kOuter;
+  fprintf(stderr, "%s: sad %g [gold %g .. %g] [out %g .. %g]\n", path, sad, min[0], max[0], min[1], max[1]);
+
+#endif
 }
 
 template <class D, HWY_IF_F32_D(D)>
